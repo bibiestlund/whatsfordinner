@@ -1,0 +1,5 @@
+create table foodpurchased
+	(item varchar (15),
+	size varchar (9),
+	date purchased date,
+	store varchar (15));
