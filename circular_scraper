@@ -1,0 +1,74 @@
+<?php
+	// Make sure we allow 30 seconds for execution
+	
+	set_time_limit(30);
+	
+	// Extract the list of available ads from the Kroger main page
+	
+	$ad_id_data = get_json("https://wklyads-krogermidatlantic.kroger.com/flyers/krogermidatlantic?type=2&store_code=00342&chrome=broadsheet", "window['hostedStack'] = ");
+	// Loop through the ads looking for the ID of an ad with a name matching "weekly."
+	
+	$id = false;
+	
+	foreach ($ad_id_data as $ad) {
+		if (strpos(strtolower($ad['name']), 'weekly') !== false) {
+			$id = $ad['flyer_run_id'];
+		}
+	}
+	
+	if ($id === false) die("Error finding ID of weekly ad.");
+	
+	// Extract the list of items from the weekly Kroger ad
+	
+	$ad_data = get_json("https://wklyads-krogermidatlantic.kroger.com/flyers/krogermidatlantic-weekly?type=2&store_code=00342&chrome=broadsheet&flyer_run_id=" . $id, "window['flyerData'] = ");
+	
+	// Extract all of the items and add their details to an output array
+	
+	$output = array();
+	
+	$headings = array('brand', 'display_name', 'name', 'description', 'pre_price_text', 'current_price', 'price_text');
+	
+	$output[] = $headings;
+	
+	foreach($ad_data['items'] as $item) {
+		$current = array();
+		
+		foreach($headings as $heading) {
+			$current[] = $item[$heading];
+		}
+		$output[] = $current;
+	}
+	
+	// Write the array to a CSV
+	
+	$listFile = fopen('kroger.csv', 'w');
+	foreach($output as $current) fputcsv($listFile, $current);
+	fclose($listFile);
+	
+	// Function to query a page and extract a JavaScript object.
+	// (Technically, it's not JSON, but in this case it's formatted like JSON, so this works.)
+	
+	function get_json($url, $marker) {
+		$ch = curl_init();
+		curl_setopt($ch, CURLOPT_URL, $url);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+		curl_setopt($ch, CURLOPT_TIMEOUT, 20);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		
+		$page_data = curl_exec($ch);
+		if(curl_error($ch) != '') die("CURL error grabbing " . $url . ".");
+		curl_close ($ch);
+		
+		$results = array();
+		
+		if (preg_match("/" . preg_quote($marker) . ".*\n/", $page_data, $results) === 1) {
+			$results = str_replace($marker, "", $results[0]);
+			$results = str_replace(";\n", "", $results);
+			
+			return json_decode($results, true);
+		} else {
+			die("Error finding requested data in " . $url . ".");
+		}
+	}
+?>
+view raw
